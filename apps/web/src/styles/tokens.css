@@ -1,0 +1,21 @@
+:root {
+  --color-bg: #ffffff;
+  --color-primary: #38bdf8;
+  --color-primary-soft: #e0f2fe;
+  --color-danger: #ef4444;
+  --color-text: #0f172a;
+  --color-border: #e2e8f0;
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --radius-md: 10px;
+  --transition-fast: 180ms ease;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+}

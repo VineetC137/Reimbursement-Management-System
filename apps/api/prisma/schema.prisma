@@ -1,0 +1,370 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ExpenseStatus {
+  DRAFT
+  SUBMITTED
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  ESCALATED
+  PAID
+}
+
+enum ApprovalInstanceStatus {
+  PENDING
+  IN_PROGRESS
+  APPROVED
+  REJECTED
+  ESCALATED
+  OVERRIDDEN
+}
+
+enum ApprovalActionType {
+  APPROVE
+  REJECT
+  ESCALATE
+  OVERRIDE_APPROVE
+  OVERRIDE_REJECT
+}
+
+enum RuleType {
+  PERCENTAGE
+  SPECIFIC_APPROVER
+  HYBRID
+}
+
+enum ConditionOperator {
+  GTE
+  EQ
+  OR
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  READ
+}
+
+model Company {
+  id                 String       @id @default(cuid())
+  name               String
+  countryCode        String
+  baseCurrency       String
+  timezone           String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  deletedAt          DateTime?
+  users              User[]
+  expenseCategories  ExpenseCategory[]
+  expenses           Expense[]
+  approvalWorkflows  ApprovalWorkflow[]
+  currencyRates      CurrencyRate[]
+  notifications      Notification[]
+  auditLogs          AuditLog[]
+}
+
+model User {
+  id                    String                  @id @default(cuid())
+  companyId             String
+  firstName             String
+  lastName              String
+  email                 String
+  passwordHash          String
+  status                UserStatus              @default(ACTIVE)
+  lastLoginAt           DateTime?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  deletedAt             DateTime?
+  company               Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  userRoles             UserRole[]
+  managerMappings       ManagerMapping[]        @relation("employee_mapping")
+  reports               ManagerMapping[]        @relation("manager_mapping")
+  submittedExpenses     Expense[]               @relation("expense_submitter")
+  receiptsUploaded      ExpenseReceipt[]        @relation("receipt_uploader")
+  stepApprovals         WorkflowStepApprover[]
+  approvalActions       ExpenseApprovalAction[] @relation("action_actor")
+  notifications         Notification[]
+  auditLogs             AuditLog[]
+
+  @@unique([companyId, email])
+  @@index([companyId, status])
+}
+
+model Role {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  userRoles   UserRole[]
+}
+
+model UserRole {
+  userId      String
+  roleId      String
+  assignedAt  DateTime @default(now())
+  assignedBy  String?
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        Role     @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([userId, roleId])
+}
+
+model ManagerMapping {
+  id          String   @id @default(cuid())
+  companyId   String
+  employeeId  String
+  managerId   String
+  effectiveAt DateTime @default(now())
+  endedAt     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  employee    User     @relation("employee_mapping", fields: [employeeId], references: [id], onDelete: Cascade)
+  manager     User     @relation("manager_mapping", fields: [managerId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, managerId])
+  @@unique([employeeId, endedAt])
+}
+
+model ExpenseCategory {
+  id          String    @id @default(cuid())
+  companyId   String
+  name        String
+  description String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  expenses    Expense[]
+
+  @@unique([companyId, name])
+}
+
+model Expense {
+  id                        String                   @id @default(cuid())
+  companyId                 String
+  employeeId                String
+  categoryId                String
+  amountOriginal            Decimal                  @db.Decimal(14, 2)
+  originalCurrency          String
+  amountCompanyCurrency     Decimal                  @db.Decimal(14, 2)
+  companyCurrency           String
+  exchangeRate              Decimal                  @db.Decimal(16, 6)
+  expenseDate               DateTime
+  description               String?
+  duplicateFingerprint      String
+  status                    ExpenseStatus            @default(DRAFT)
+  submittedAt               DateTime?
+  createdAt                 DateTime                 @default(now())
+  updatedAt                 DateTime                 @updatedAt
+  deletedAt                 DateTime?
+  company                   Company                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  employee                  User                     @relation("expense_submitter", fields: [employeeId], references: [id], onDelete: Restrict)
+  category                  ExpenseCategory          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  receipts                  ExpenseReceipt[]
+  approvalInstance          ExpenseApprovalInstance?
+  auditLogs                 AuditLog[]
+
+  @@index([companyId, employeeId, status, submittedAt])
+  @@index([duplicateFingerprint])
+}
+
+model ExpenseReceipt {
+  id                    String   @id @default(cuid())
+  expenseId             String
+  fileName              String
+  fileUrl               String
+  mimeType              String
+  fileSizeBytes         Int
+  ocrRawText            String?
+  ocrConfidence         Decimal? @db.Decimal(5, 2)
+  extractedAmount       Decimal? @db.Decimal(14, 2)
+  extractedCurrency     String?
+  extractedDate         DateTime?
+  extractionReviewed    Boolean  @default(false)
+  uploadedById          String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  expense               Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  uploadedBy            User?    @relation("receipt_uploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([expenseId])
+}
+
+model ApprovalWorkflow {
+  id                String                  @id @default(cuid())
+  companyId         String
+  name              String
+  description       String?
+  isDefault         Boolean                 @default(false)
+  managerFirst      Boolean                 @default(true)
+  isActive          Boolean                 @default(true)
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  deletedAt         DateTime?
+  company           Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  steps             WorkflowStep[]
+  rules             ApprovalRule[]
+  approvalInstances ExpenseApprovalInstance[]
+
+  @@index([companyId, isActive])
+}
+
+model WorkflowStep {
+  id                String                 @id @default(cuid())
+  workflowId        String
+  stepOrder         Int
+  name              String
+  isRequired        Boolean                @default(true)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  workflow          ApprovalWorkflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  stepApprovers     WorkflowStepApprover[]
+
+  @@unique([workflowId, stepOrder])
+}
+
+model WorkflowStepApprover {
+  id          String       @id @default(cuid())
+  stepId      String
+  approverId  String
+  createdAt   DateTime     @default(now())
+  step        WorkflowStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  approver    User         @relation(fields: [approverId], references: [id], onDelete: Restrict)
+
+  @@unique([stepId, approverId])
+  @@index([approverId])
+}
+
+model ApprovalRule {
+  id              String                  @id @default(cuid())
+  workflowId      String
+  ruleType        RuleType
+  isActive        Boolean                 @default(true)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  workflow        ApprovalWorkflow        @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  conditions      ApprovalRuleCondition[]
+}
+
+model ApprovalRuleCondition {
+  id              String            @id @default(cuid())
+  ruleId          String
+  field           String
+  operator        ConditionOperator
+  value           String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  rule            ApprovalRule      @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId, field])
+}
+
+model ExpenseApprovalInstance {
+  id                String                   @id @default(cuid())
+  expenseId         String                   @unique
+  workflowId        String
+  currentStepOrder  Int                      @default(1)
+  status            ApprovalInstanceStatus   @default(PENDING)
+  startedAt         DateTime                 @default(now())
+  completedAt       DateTime?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  expense           Expense                  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  workflow          ApprovalWorkflow         @relation(fields: [workflowId], references: [id], onDelete: Restrict)
+  actions           ExpenseApprovalAction[]
+
+  @@index([status, currentStepOrder])
+}
+
+model ExpenseApprovalAction {
+  id                String               @id @default(cuid())
+  instanceId        String
+  stepOrder         Int
+  actorId           String
+  action            ApprovalActionType
+  comment           String?
+  fromStatus        ExpenseStatus?
+  toStatus          ExpenseStatus?
+  actedAt           DateTime             @default(now())
+  ipAddress         String?
+  createdAt         DateTime             @default(now())
+  instance          ExpenseApprovalInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  actor             User                 @relation("action_actor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([instanceId, actedAt])
+  @@index([actorId, actedAt])
+}
+
+model CurrencyRate {
+  id              String   @id @default(cuid())
+  companyId       String
+  baseCurrency    String
+  quoteCurrency   String
+  rate            Decimal  @db.Decimal(16, 6)
+  source          String
+  fetchedAt       DateTime
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([baseCurrency, quoteCurrency, fetchedAt(sort: Desc)])
+  @@index([companyId, fetchedAt(sort: Desc)])
+}
+
+model Notification {
+  id              String             @id @default(cuid())
+  companyId       String
+  userId          String
+  title           String
+  message         String
+  status          NotificationStatus @default(PENDING)
+  channel         String             @default("IN_APP")
+  payload         Json?
+  readAt          DateTime?
+  sentAt          DateTime?
+  retryCount      Int                @default(0)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  company         Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt(sort: Desc)])
+}
+
+model AuditLog {
+  id              String    @id @default(cuid())
+  companyId       String
+  userId          String?
+  expenseId       String?
+  entityType      String
+  entityId        String
+  action          String
+  oldValue        Json?
+  newValue        Json?
+  reason          String?
+  ipAddress       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  expense         Expense?  @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, entityType, createdAt(sort: Desc)])
+  @@index([expenseId, createdAt(sort: Desc)])
+}

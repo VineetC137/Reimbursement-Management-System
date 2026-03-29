@@ -1,0 +1,12 @@
+{
+  "name": "reimbursement-management-system",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "check:structure": "test -f docs/API_SPEC.md && test -f apps/api/prisma/schema.prisma && test -f apps/web/src/App.tsx"
+  }
+}
