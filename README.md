@@ -15,6 +15,6 @@ A full-stack web application to automate expense reimbursement processes with ro
 - Database: MongoDB / PostgreSQL
 
 ## Author
-Vineet Unde
-Asad Pathan
-Shraddha Bhadane
+- Vineet Unde
+- Asad Pathan
+- Shraddha Bhadane
