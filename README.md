@@ -210,9 +210,9 @@ OCR is intentionally delayed until the reimbursement and approval flow is solid.
 - [Presentation Checklist](D:/ASSIGNMENTS%20VIIT/SEM%206/Odoo_Reimbursement_management/docs/PRESENTATION_CHECKLIST.md)
 
 ## Team
-- @VineetC137
-- @asadp3406
-- @sharddhabhadane12
+- [VineetC137](https://github.com/VineetC137)
+- [Asad](https://github.com/Asadp3406)
+- [shraddhabhadane12](https://github.com/shraddhabhadane12) 
 
 ## Final Note
 This project should feel like it was built by a team that understood the domain and made deliberate technical choices. The repo should tell that story clearly through the schema, the API design, the UI decisions, and the commit history on `main`.
