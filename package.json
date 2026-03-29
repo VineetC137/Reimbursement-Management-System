@@ -1,0 +1,22 @@
+{
+  "name": "reimbursement-management-system",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w @reimbursement/api",
+    "dev:web": "npm run dev -w @reimbursement/web",
+    "build:api": "npm run build -w @reimbursement/api",
+    "build:web": "npm run build -w @reimbursement/web",
+    "build": "npm run build:api && npm run build:web",
+    "test:api": "npm run test -w @reimbursement/api",
+    "test:web": "npm run test -w @reimbursement/web",
+    "test": "npm run test:api && npm run test:web",
+    "prisma:generate": "npm run prisma:generate -w @reimbursement/api",
+    "prisma:seed": "npm run prisma:seed -w @reimbursement/api",
+    "check:structure": "node -e \"const fs=require('fs'); const files=['docs/API_SPEC.md','apps/api/prisma/schema.prisma','apps/web/src/App.tsx']; const missing=files.filter((file)=>!fs.existsSync(file)); if(missing.length){console.error('Missing required files:\\n' + missing.join('\\n')); process.exit(1);} console.log('Project structure looks correct.');\""
+  }
+}
