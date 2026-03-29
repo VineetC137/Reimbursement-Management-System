@@ -9,6 +9,8 @@ import { notFoundHandler } from "./middleware/not-found.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { expenseRouter } from "./modules/expenses/expense.routes.js";
 import { metadataRouter } from "./modules/metadata/metadata.routes.js";
+import { notificationRouter } from "./modules/notifications/notification.routes.js";
+import { reportRouter } from "./modules/reports/report.routes.js";
 import { usersRouter } from "./modules/users/user.routes.js";
 import { workflowRouter } from "./modules/workflows/workflow.routes.js";
 
@@ -33,6 +35,8 @@ app.use("/api/v1/metadata", metadataRouter);
 app.use("/api/v1/users", usersRouter);
 app.use("/api/v1/expenses", expenseRouter);
 app.use("/api/v1/workflows", workflowRouter);
+app.use("/api/v1/notifications", notificationRouter);
+app.use("/api/v1/reports", reportRouter);
 
 app.get("/api/v1/docs", (_req, res) => {
   res.json({

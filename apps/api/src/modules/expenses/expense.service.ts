@@ -583,7 +583,24 @@ export async function listExpenses(auth: AuthContext): Promise<ExpenseSummary[]>
   };
 
   if (!auth.roles.includes("ADMIN")) {
-    where.employeeId = auth.userId;
+    if (auth.roles.includes("MANAGER")) {
+      const reportees = await prisma.managerMapping.findMany({
+        where: {
+          companyId: auth.companyId,
+          managerId: auth.userId,
+          endedAt: null
+        },
+        select: {
+          employeeId: true
+        }
+      });
+
+      where.employeeId = {
+        in: [auth.userId, ...reportees.map((reportee) => reportee.employeeId)]
+      };
+    } else {
+      where.employeeId = auth.userId;
+    }
   }
 
   const expenses = await prisma.expense.findMany({
@@ -969,6 +986,23 @@ export async function actOnExpense(
       }
     }
 
+    if (evaluation.outcome === "APPROVED" || evaluation.outcome === "REJECTED") {
+      await createNotifications(
+        client,
+        auth.companyId,
+        [expense.employee.id],
+        evaluation.outcome === "APPROVED" ? "Expense approved" : "Expense rejected",
+        evaluation.outcome === "APPROVED"
+          ? "Your expense has completed the approval workflow."
+          : "Your expense was rejected during the approval workflow.",
+        {
+          expenseId: expense.id,
+          finalStatus: evaluation.outcome,
+          comment: input.comment?.trim() || null
+        }
+      );
+    }
+
     return client.expense.findUniqueOrThrow({
       where: {
         id: expense.id
@@ -1038,6 +1072,21 @@ export async function overrideExpense(
         reason: input.comment.trim()
       }
     });
+
+    await createNotifications(
+      client,
+      auth.companyId,
+      [expense.employee.id],
+      input.action === "APPROVE" ? "Expense approved by admin" : "Expense rejected by admin",
+      input.action === "APPROVE"
+        ? "An admin override approved your expense."
+        : "An admin override rejected your expense.",
+      {
+        expenseId: expense.id,
+        finalStatus: input.action,
+        comment: input.comment.trim()
+      }
+    );
 
     return client.expense.findUniqueOrThrow({
       where: {

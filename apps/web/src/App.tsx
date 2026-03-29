@@ -125,6 +125,57 @@ type WorkflowSettingsSummary = {
   };
 };
 
+type NotificationSummary = {
+  id: string;
+  title: string;
+  message: string;
+  status: string;
+  channel: string;
+  readAt: string | null;
+  createdAt: string;
+  payload: Record<string, unknown> | null;
+};
+
+type ReportDashboardSummary = {
+  totalExpenses: number;
+  draftExpenses: number;
+  inReviewExpenses: number;
+  approvedExpenses: number;
+  rejectedExpenses: number;
+  approvedAmountCompanyCurrency: string;
+  inReviewAmountCompanyCurrency: string;
+};
+
+type PendingByApproverItem = {
+  approverId: string;
+  approverName: string;
+  approverEmail: string;
+  pendingCount: number;
+};
+
+type RejectionReportItem = {
+  expenseId: string;
+  employeeName: string;
+  categoryName: string;
+  amountCompanyCurrency: string;
+  companyCurrency: string;
+  rejectedAt: string | null;
+  rejectedBy: string | null;
+  comment: string | null;
+};
+
+type AgingReportItem = {
+  expenseId: string;
+  employeeName: string;
+  categoryName: string;
+  amountCompanyCurrency: string;
+  companyCurrency: string;
+  submittedAt: string | null;
+  daysPending: number;
+  currentStageName: string | null;
+  pendingApprovers: string[];
+};
+
 type ApiErrorPayload = {
   success?: boolean;
   error?: {
@@ -422,6 +473,17 @@ export default function App() {
   const [workflowFieldErrors, setWorkflowFieldErrors] = useState<Record<string, string>>({});
   const [workflowForm, setWorkflowForm] = useState<WorkflowFormState>(createInitialWorkflowForm());
   const [isSavingWorkflow, setIsSavingWorkflow] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationSummary[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsError, setNotificationsError] = useState("");
+  const [markingNotificationId, setMarkingNotificationId] = useState("");
+  const [markingAllNotifications, setMarkingAllNotifications] = useState(false);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportsError, setReportsError] = useState("");
+  const [dashboardReport, setDashboardReport] = useState<ReportDashboardSummary | null>(null);
+  const [pendingByApproverReport, setPendingByApproverReport] = useState<PendingByApproverItem[]>([]);
+  const [rejectionReport, setRejectionReport] = useState<RejectionReportItem[]>([]);
+  const [agingReport, setAgingReport] = useState<AgingReportItem[]>([]);
   useEffect(() => {
     void loadCountries();
   }, []);
@@ -442,6 +504,7 @@ export default function App() {
   const workflowApproverCandidates = users.filter((user) => user.role === "MANAGER" || user.role === "ADMIN");
   const employeeCount = users.filter((user) => user.role === "EMPLOYEE").length;
   const managerCount = users.filter((user) => user.role === "MANAGER").length;
+  const unreadNotificationCount = notifications.filter((notification) => !notification.readAt).length;
 
   const expenseStats = useMemo(
     () => ({
@@ -482,6 +545,8 @@ export default function App() {
     setApprovalError("");
     setWorkflowMessage("");
     setWorkflowError("");
+    setNotificationsError("");
+    setReportsError("");
   }
 
   function syncUserDrafts(nextUsers: UserSummary[]): void {
@@ -521,39 +586,50 @@ export default function App() {
   }
 
   async function loadWorkspaceData(currentSession: Session): Promise<void> {
+    const currentIsAdmin = currentSession.user.roles.includes("ADMIN");
+    const currentCanApprove = currentSession.user.roles.includes("MANAGER") || currentIsAdmin;
+
     clearWorkspaceMessages();
     setUsersError("");
     setCategoriesError("");
     setExpensesError("");
     setQueueError("");
     setWorkflowError("");
+    setNotificationsError("");
+    setReportsError("");
 
     setCategoriesLoading(true);
     setExpensesLoading(true);
+    setNotificationsLoading(true);
 
-    if (isAdmin) {
+    if (currentIsAdmin) {
       setUsersLoading(true);
       setWorkflowLoading(true);
     }
 
-    if (canApprove) {
+    if (currentCanApprove) {
       setQueueLoading(true);
+      setReportsLoading(true);
     }
 
     try {
-      const [categoriesResponse, expensesResponse] = await Promise.all([
+      const [categoriesResponse, expensesResponse, notificationsResponse] = await Promise.all([
         requestJson<ExpenseCategorySummary[]>("/expenses/categories", {
           token: currentSession.accessToken
         }),
         requestJson<ExpenseSummary[]>("/expenses", {
+          token: currentSession.accessToken
+        }),
+        requestJson<NotificationSummary[]>("/notifications", {
           token: currentSession.accessToken
         })
       ]);
 
       setCategories(categoriesResponse.data);
       setExpenses(expensesResponse.data);
+      setNotifications(notificationsResponse.data);
 
-      if (isAdmin) {
+      if (currentIsAdmin) {
         const [usersResponse, workflowResponse] = await Promise.all([
           requestJson<UserSummary[]>("/users", {
             token: currentSession.accessToken
@@ -569,12 +645,37 @@ export default function App() {
         setWorkflowForm(mapWorkflowToForm(workflowResponse.data));
       }
 
-      if (canApprove) {
-        const queueResponse = await requestJson<ExpenseSummary[]>("/expenses/queue", {
-          token: currentSession.accessToken
-        });
+      if (currentCanApprove) {
+        const [queueResponse, dashboardResponse, pendingByApproverResponse, rejectionResponse, agingResponse] =
+          await Promise.all([
+            requestJson<ExpenseSummary[]>("/expenses/queue", {
+              token: currentSession.accessToken
+            }),
+            requestJson<ReportDashboardSummary>("/reports/dashboard", {
+              token: currentSession.accessToken
+            }),
+            requestJson<PendingByApproverItem[]>("/reports/pending-by-approver", {
+              token: currentSession.accessToken
+            }),
+            requestJson<RejectionReportItem[]>("/reports/rejections", {
+              token: currentSession.accessToken
+            }),
+            requestJson<AgingReportItem[]>("/reports/aging", {
+              token: currentSession.accessToken
+            })
+          ]);
 
         setQueueItems(queueResponse.data);
+        setDashboardReport(dashboardResponse.data);
+        setPendingByApproverReport(pendingByApproverResponse.data);
+        setRejectionReport(rejectionResponse.data);
+        setAgingReport(agingResponse.data);
+      } else {
+        setQueueItems([]);
+        setDashboardReport(null);
+        setPendingByApproverReport([]);
+        setRejectionReport([]);
+        setAgingReport([]);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to load workspace";
@@ -585,6 +686,8 @@ export default function App() {
       setUsersLoading(false);
       setWorkflowLoading(false);
       setQueueLoading(false);
+      setNotificationsLoading(false);
+      setReportsLoading(false);
     }
   }
 
@@ -1073,6 +1176,50 @@ export default function App() {
     }
   }
 
+  async function handleNotificationRead(notificationId: string): Promise<void> {
+    if (!session) {
+      return;
+    }
+
+    setMarkingNotificationId(notificationId);
+    setNotificationsError("");
+
+    try {
+      await requestJson<NotificationSummary>(`/notifications/${notificationId}/read`, {
+        method: "PATCH",
+        token: session.accessToken
+      });
+
+      await loadWorkspaceData(session);
+    } catch (error) {
+      setNotificationsError(error instanceof Error ? error.message : "Unable to update notification");
+    } finally {
+      setMarkingNotificationId("");
+    }
+  }
+
+  async function handleReadAllNotifications(): Promise<void> {
+    if (!session) {
+      return;
+    }
+
+    setMarkingAllNotifications(true);
+    setNotificationsError("");
+
+    try {
+      await requestJson<{ updatedCount: number }>("/notifications/read-all", {
+        method: "PATCH",
+        token: session.accessToken
+      });
+
+      await loadWorkspaceData(session);
+    } catch (error) {
+      setNotificationsError(error instanceof Error ? error.message : "Unable to update notifications");
+    } finally {
+      setMarkingAllNotifications(false);
+    }
+  }
+
   function updateWorkflowStepApprovers(index: number, event: ChangeEvent<HTMLSelectElement>): void {
     const approverIds = Array.from(event.target.selectedOptions).map((option) => option.value);
 
@@ -1099,6 +1246,11 @@ export default function App() {
     setExpenses([]);
     setQueueItems([]);
     setWorkflow(null);
+    setNotifications([]);
+    setDashboardReport(null);
+    setPendingByApproverReport([]);
+    setRejectionReport([]);
+    setAgingReport([]);
     clearWorkspaceMessages();
     setExpenseForm(createEmptyExpenseForm());
     setEditingExpenseId(null);
@@ -1123,6 +1275,8 @@ export default function App() {
             {isAdmin ? <a href="#user-management">Users</a> : null}
             <a href="#expense-workspace">Expenses</a>
             {canApprove ? <a href="#approval-queue">Approvals</a> : null}
+            <a href="#notifications">Notifications</a>
+            {canApprove ? <a href="#reports">Reports</a> : null}
             {isAdmin ? <a href="#workflow-settings">Workflow</a> : null}
           </nav>
 
@@ -1169,6 +1323,11 @@ export default function App() {
               <strong>{queueItems.length}</strong>
               <p>{canApprove ? "Items currently waiting for your decision." : "Approval access depends on your role."}</p>
             </article>
+            <article className="metric-card">
+              <span className="metric-label">Unread Notifications</span>
+              <strong>{unreadNotificationCount}</strong>
+              <p>Approval movement, final decisions, and action reminders appear here.</p>
+            </article>
           </section>
 
           <section className="next-step-grid">
@@ -1187,7 +1346,7 @@ export default function App() {
               <ul>
                 <li>Receipt OCR extraction and auto-fill</li>
                 <li>Smarter duplicate detection scoring</li>
-                <li>Notification center UI and report exports</li>
+                <li>Export-ready reports and printable summaries</li>
                 <li>Attachment upload pipeline beyond URL-based receipts</li>
               </ul>
             </article>
@@ -1374,7 +1533,7 @@ export default function App() {
 
             <article className="workspace-card workspace-card-wide">
               <div className="section-heading">
-                <div><p className="eyebrow">History</p><h3>{isAdmin ? "Company expenses" : "Your expenses"}</h3></div>
+                <div><p className="eyebrow">History</p><h3>{isAdmin ? "Company expenses" : canApprove ? "Team and personal expenses" : "Your expenses"}</h3></div>
                 <span className="mini-chip">{expensesLoading ? "Refreshing..." : `${expenses.length} record${expenses.length === 1 ? "" : "s"}`}</span>
               </div>
               {expensesError ? <SectionBanner message={expensesError} tone="danger" /> : null}
@@ -1479,6 +1638,181 @@ export default function App() {
                       </div>
                     </article>
                   ))}
+                </div>
+              )}
+            </section>
+          ) : null}
+
+          <section className="workspace-card" id="notifications">
+            <div className="section-heading">
+              <div><p className="eyebrow">Notifications</p><h3>Activity and final decision updates</h3></div>
+              <div className="section-heading-actions">
+                <span className="mini-chip">{notificationsLoading ? "Refreshing..." : `${unreadNotificationCount} unread`}</span>
+                {notifications.length > 0 ? (
+                  <button className="ghost-button" type="button" disabled={markingAllNotifications || unreadNotificationCount === 0} onClick={() => void handleReadAllNotifications()}>
+                    {markingAllNotifications ? "Updating..." : "Mark all read"}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            {notificationsError ? <SectionBanner message={notificationsError} tone="danger" /> : null}
+
+            {notificationsLoading ? (
+              <div className="loading-panel">Loading notifications...</div>
+            ) : notifications.length === 0 ? (
+              <div className="empty-panel"><h4>No notifications yet</h4><p>Approval requests, movement between stages, and final decisions will appear here.</p></div>
+            ) : (
+              <div className="notification-list">
+                {notifications.map((notification) => {
+                  const payloadExpenseId = typeof notification.payload?.expenseId === "string" ? notification.payload.expenseId : null;
+
+                  return (
+                    <article className={`notification-item${notification.readAt ? " is-read" : ""}`} key={notification.id}>
+                      <div className="notification-item-top">
+                        <div>
+                          <h4>{notification.title}</h4>
+                          <p>{notification.message}</p>
+                        </div>
+                        <span className={`notification-badge${notification.readAt ? " is-read" : ""}`}>
+                          {notification.readAt ? "Read" : "Unread"}
+                        </span>
+                      </div>
+
+                      <div className="notification-meta">
+                        <span>{formatDateTime(notification.createdAt)}</span>
+                        <span className="dot-divider">|</span>
+                        <span>{notification.channel.toLowerCase()}</span>
+                        {payloadExpenseId ? (
+                          <>
+                            <span className="dot-divider">|</span>
+                            <span>Expense #{payloadExpenseId.slice(0, 8).toUpperCase()}</span>
+                          </>
+                        ) : null}
+                      </div>
+
+                      <div className="notification-actions">
+                        <span className="notification-read-state">
+                          {notification.readAt ? `Read on ${formatDateTime(notification.readAt)}` : "Waiting for you to acknowledge this update"}
+                        </span>
+                        {!notification.readAt ? (
+                          <button className="ghost-button" type="button" disabled={markingNotificationId === notification.id} onClick={() => void handleNotificationRead(notification.id)}>
+                            {markingNotificationId === notification.id ? "Saving..." : "Mark as read"}
+                          </button>
+                        ) : null}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          {canApprove ? (
+            <section className="workspace-card" id="reports">
+              <div className="section-heading">
+                <div><p className="eyebrow">Reports</p><h3>Operational reporting for review teams</h3></div>
+                <span className="mini-chip">{reportsLoading ? "Refreshing..." : "Live company snapshot"}</span>
+              </div>
+              {reportsError ? <SectionBanner message={reportsError} tone="danger" /> : null}
+
+              {reportsLoading ? (
+                <div className="loading-panel">Loading reports...</div>
+              ) : (
+                <div className="report-stack">
+                  <div className="report-stat-grid">
+                    <article className="report-stat-card">
+                      <span className="metric-label">Total expenses</span>
+                      <strong>{dashboardReport?.totalExpenses ?? 0}</strong>
+                      <p>All draft, in-review, approved, and rejected expenses in your scope.</p>
+                    </article>
+                    <article className="report-stat-card">
+                      <span className="metric-label">Approved amount</span>
+                      <strong>{formatCurrency(dashboardReport?.approvedAmountCompanyCurrency ?? "0", session.company.baseCurrency)}</strong>
+                      <p>{dashboardReport?.approvedExpenses ?? 0} approved expenses converted to company currency.</p>
+                    </article>
+                    <article className="report-stat-card">
+                      <span className="metric-label">In review amount</span>
+                      <strong>{formatCurrency(dashboardReport?.inReviewAmountCompanyCurrency ?? "0", session.company.baseCurrency)}</strong>
+                      <p>{dashboardReport?.inReviewExpenses ?? 0} expenses still moving through workflow stages.</p>
+                    </article>
+                    <article className="report-stat-card">
+                      <span className="metric-label">Rejected expenses</span>
+                      <strong>{dashboardReport?.rejectedExpenses ?? 0}</strong>
+                      <p>Useful for spotting policy gaps, poor receipts, or duplicate submissions.</p>
+                    </article>
+                  </div>
+
+                  <div className="report-grid">
+                    <article className="report-panel">
+                      <div className="section-heading">
+                        <div><p className="eyebrow">Queue Load</p><h3>Pending by approver</h3></div>
+                      </div>
+                      {pendingByApproverReport.length === 0 ? (
+                        <div className="empty-inline-state">No active in-review expenses are waiting in the current approval stages.</div>
+                      ) : (
+                        <div className="report-list">
+                          {pendingByApproverReport.map((item) => (
+                            <div className="report-list-item" key={item.approverId}>
+                              <div>
+                                <strong>{item.approverName}</strong>
+                                <p>{item.approverEmail}</p>
+                              </div>
+                              <span className="report-count-chip">{item.pendingCount} pending</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </article>
+
+                    <article className="report-panel">
+                      <div className="section-heading">
+                        <div><p className="eyebrow">Aging</p><h3>Oldest active approvals</h3></div>
+                      </div>
+                      {agingReport.length === 0 ? (
+                        <div className="empty-inline-state">No in-review expenses are aging right now.</div>
+                      ) : (
+                        <div className="report-list">
+                          {agingReport.slice(0, 6).map((item) => (
+                            <div className="report-list-item" key={item.expenseId}>
+                              <div>
+                                <strong>{item.employeeName}</strong>
+                                <p>{item.categoryName} | {item.currentStageName ?? "Approval stage"} | {item.pendingApprovers.join(", ") || "No pending approver"}</p>
+                              </div>
+                              <div className="report-amount-block">
+                                <strong>{item.daysPending}d</strong>
+                                <span>{formatCurrency(item.amountCompanyCurrency, item.companyCurrency)}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </article>
+
+                    <article className="report-panel report-panel-wide">
+                      <div className="section-heading">
+                        <div><p className="eyebrow">Rejections</p><h3>Recent rejected expenses</h3></div>
+                      </div>
+                      {rejectionReport.length === 0 ? (
+                        <div className="empty-inline-state">No rejected expenses in your current reporting scope.</div>
+                      ) : (
+                        <div className="report-list">
+                          {rejectionReport.map((item) => (
+                            <div className="report-list-item report-list-item-expanded" key={item.expenseId}>
+                              <div>
+                                <strong>{item.employeeName}</strong>
+                                <p>{item.categoryName} | {formatCurrency(item.amountCompanyCurrency, item.companyCurrency)}</p>
+                                <p>{item.rejectedBy ? `Rejected by ${item.rejectedBy}` : "Rejected"}{item.rejectedAt ? ` on ${formatDateTime(item.rejectedAt)}` : ""}</p>
+                              </div>
+                              <div className="report-comment">
+                                <span className="meta-label">Comment</span>
+                                <p>{item.comment ?? "No rejection comment was provided."}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </article>
+                  </div>
                 </div>
               )}
             </section>

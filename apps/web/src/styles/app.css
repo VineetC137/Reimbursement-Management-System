@@ -160,6 +160,13 @@
   gap: 16px;
 }
 
+.section-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
 .auth-panel-header {
   margin-bottom: 28px;
 }
@@ -463,7 +470,10 @@
 .user-card,
 .expense-card,
 .queue-card,
-.step-card {
+.step-card,
+.notification-item,
+.report-stat-card,
+.report-panel {
   padding: 18px;
   border: 1px solid rgba(23, 135, 212, 0.12);
   border-radius: 22px;
@@ -473,6 +483,7 @@
 .user-card-header h4,
 .expense-card h4,
 .queue-card h4,
+.notification-item h4,
 .empty-panel h4 {
   margin: 0 0 6px;
 }
@@ -480,6 +491,7 @@
 .user-card-header p,
 .expense-card-top p,
 .queue-card p,
+.notification-item p,
 .timeline-item span {
   margin: 0;
   color: var(--color-text-muted);
@@ -601,8 +613,159 @@
 }
 
 .dot-divider {
+  display: inline-flex;
+  align-items: center;
   padding: 0 8px;
+  font-size: 0;
   color: var(--color-text-muted);
+}
+
+.dot-divider::before {
+  content: "|";
+  font-size: 0.95rem;
+}
+
+.notification-list,
+.report-stack,
+.report-list {
+  display: grid;
+  gap: 16px;
+}
+
+.notification-item-top,
+.notification-actions,
+.report-list-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.notification-item.is-read {
+  opacity: 0.88;
+}
+
+.notification-badge,
+.report-count-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.notification-badge {
+  background: rgba(228, 87, 87, 0.12);
+  color: var(--color-danger);
+}
+
+.notification-badge.is-read {
+  background: rgba(86, 182, 247, 0.14);
+  color: var(--color-accent-blue);
+}
+
+.notification-meta,
+.notification-read-state,
+.report-list-item p,
+.report-comment p,
+.empty-inline-state {
+  color: var(--color-text-muted);
+  line-height: 1.65;
+}
+
+.notification-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.notification-actions {
+  margin-top: 14px;
+}
+
+.report-stat-grid,
+.report-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.report-stat-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.report-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.report-stat-card strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 1.45rem;
+}
+
+.report-stat-card p {
+  margin: 0;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+.report-panel-wide {
+  grid-column: 1 / -1;
+}
+
+.report-list {
+  gap: 14px;
+}
+
+.report-list-item {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(247, 251, 255, 0.94);
+  border: 1px solid rgba(23, 135, 212, 0.08);
+}
+
+.report-list-item strong,
+.report-amount-block strong {
+  display: block;
+}
+
+.report-count-chip {
+  background: rgba(86, 182, 247, 0.12);
+  color: var(--color-accent-blue);
+  white-space: nowrap;
+}
+
+.report-amount-block {
+  display: grid;
+  gap: 6px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.report-amount-block span {
+  color: var(--color-text-muted);
+}
+
+.report-list-item-expanded {
+  align-items: stretch;
+}
+
+.report-comment {
+  min-width: 240px;
+  padding-left: 16px;
+  border-left: 1px solid rgba(23, 135, 212, 0.1);
+}
+
+.empty-inline-state {
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(247, 251, 255, 0.9);
+  border: 1px dashed rgba(23, 135, 212, 0.18);
 }
 
 @keyframes rise-in {
@@ -633,6 +796,8 @@
   .metrics-grid,
   .management-grid,
   .workspace-grid,
+  .report-stat-grid,
+  .report-grid,
   .field-row,
   .expense-meta-grid,
   .user-meta-grid {
@@ -659,7 +824,11 @@
   .user-card-header,
   .step-card-header,
   .expense-card-top,
-  .expense-amount-row {
+  .expense-amount-row,
+  .notification-item-top,
+  .notification-actions,
+  .report-list-item,
+  .report-list-item-expanded {
     flex-direction: column;
   }
 
@@ -672,7 +841,23 @@
   }
 
   .action-button-row .ghost-button,
-  .action-button-row .primary-button {
+  .action-button-row .primary-button,
+  .section-heading-actions .ghost-button {
     width: 100%;
+  }
+
+  .notification-actions,
+  .report-amount-block,
+  .section-heading-actions {
+    align-items: stretch;
+    text-align: left;
+  }
+
+  .report-comment {
+    min-width: 0;
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid rgba(23, 135, 212, 0.1);
+    padding-top: 12px;
   }
 }

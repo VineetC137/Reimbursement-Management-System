@@ -62,6 +62,11 @@ This repo is organized around the strongest judging criteria:
 - approvers can approve or reject with comments
 - admin can override with audit remarks
 
+### Notifications and Reporting
+- in-app notifications show stage changes, approval requests, and final outcomes
+- managers and admins can review aging approvals, rejection history, and queue load
+- reports stay scoped to the current company and role visibility rules
+
 ### Conditional Approval Rules
 - percentage approval rules
 - specific approver rules
@@ -178,6 +183,8 @@ Detailed setup steps are in [setup-local.md](D:/ASSIGNMENTS%20VIIT/SEM%206/Odoo_
 - expense submission
 - approval rules
 - approval execution engine
+- in-app notifications
+- manager and admin reporting
 - audit trail
 - responsive UI
 - local cache for country and currency data
